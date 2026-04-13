@@ -12,6 +12,7 @@ export async function onRequestOptions() {
 }
 
 export async function onRequestPost(context) {
+  const requestStartedAt = Date.now();
   try {
     console.log("START submit");
 
@@ -21,14 +22,17 @@ export async function onRequestPost(context) {
     const env = context.env;
 
     console.log("Getting token...");
+    const tokenStartedAt = Date.now();
     const token = await getAccessToken(env);
     console.log("Got token");
+    console.log(`token_ms=${Date.now() - tokenStartedAt}`);
 
     const company = sanitizeFileName(body.company || "Company");
     const timestamp = formatTimestamp(new Date());
     const newFileName = `${company}_Survey_${timestamp}.xlsx`;
 
     console.log("Copying template...", newFileName);
+    const copyStartedAt = Date.now();
     const newItemId = await copyTemplateAndWait({
       token,
       siteId: env.SITE_ID,
@@ -38,10 +42,12 @@ export async function onRequestPost(context) {
       newFileName,
     });
     console.log("Template copied. NEW ITEM ID:", newItemId);
+    console.log(`copy_total_ms=${Date.now() - copyStartedAt}`);
 
     const values = buildInputRangeValues(body);
 
     console.log("Writing worksheet...", "Inputs_From_User", "E2:G41");
+    const worksheetStartedAt = Date.now();
     await updateWorksheetRange({
       token,
       siteId: env.SITE_ID,
@@ -52,6 +58,8 @@ export async function onRequestPost(context) {
       values,
     });
     console.log("Worksheet updated");
+    console.log(`worksheet_total_ms=${Date.now() - worksheetStartedAt}`);
+    console.log(`total_ms=${Date.now() - requestStartedAt}`);
 
     return json({
       ok: true,
@@ -147,6 +155,7 @@ async function copyTemplateAndWait({
   responsesFolderId,
   newFileName,
 }) {
+  const copyRequestStartedAt = Date.now();
   const copyUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/items/${templateItemId}/copy`;
 
   const copyRes = await fetch(copyUrl, {
@@ -169,11 +178,14 @@ async function copyTemplateAndWait({
     throw new Error(`Template copy failed: ${copyRes.status} ${text}`);
   }
 
+  console.log(`copy_request_ms=${Date.now() - copyRequestStartedAt}`);
+
   const monitorUrl =
     copyRes.headers.get("Location") || copyRes.headers.get("operation-location");
 
   if (!monitorUrl) {
     console.log("No monitor URL returned. Falling back to polling folder.");
+    const fallbackLookupStartedAt = Date.now();
     const item = await waitForFileInResponsesFolder({
       token,
       siteId,
@@ -181,11 +193,13 @@ async function copyTemplateAndWait({
       responsesFolderId,
       fileName: newFileName,
     });
+    console.log(`copy_wait_ms=${Date.now() - fallbackLookupStartedAt}`);
 
     return item.id;
   }
 
   console.log("Monitor URL received. Polling copy operation...");
+  const copyWaitStartedAt = Date.now();
 
   for (let i = 0; i < 12; i++) {
     if (i > 0) {
@@ -219,6 +233,7 @@ async function copyTemplateAndWait({
           responsesFolderId,
           fileName: newFileName,
         });
+        console.log(`copy_wait_ms=${Date.now() - copyWaitStartedAt}`);
 
         return item.id;
       }
@@ -230,6 +245,7 @@ async function copyTemplateAndWait({
         responsesFolderId,
         fileName: newFileName,
       });
+      console.log(`copy_wait_ms=${Date.now() - copyWaitStartedAt}`);
 
       return item.id;
     }
@@ -242,6 +258,7 @@ async function copyTemplateAndWait({
     responsesFolderId,
     fileName: newFileName,
   });
+  console.log(`copy_wait_ms=${Date.now() - copyWaitStartedAt}`);
 
   return item.id;
 }
@@ -326,8 +343,11 @@ async function updateWorksheetRange({
     let sessionId = null;
 
     try {
+      const sessionStartedAt = Date.now();
       sessionId = await createWorkbookSession({ token, siteId, driveId, itemId });
+      console.log(`create_session_ms=${Date.now() - sessionStartedAt}`);
 
+      const patchStartedAt = Date.now();
       const res = await fetch(url, {
         method: "PATCH",
         headers: {
@@ -339,6 +359,7 @@ async function updateWorksheetRange({
       });
 
       const text = await res.text();
+      console.log(`worksheet_patch_ms=${Date.now() - patchStartedAt}`);
 
       if (res.ok) {
         return;
