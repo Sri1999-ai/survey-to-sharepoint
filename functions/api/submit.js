@@ -7,16 +7,22 @@ export async function onRequestOptions() {
 
 export async function onRequestPost(context) {
   try {
+    console.log("START submit");
+
     const body = await context.request.json();
     validatePayload(body);
 
     const env = context.env;
+
+    console.log("Getting token...");
     const token = await getAccessToken(env);
+    console.log("Got token");
 
     const company = sanitizeFileName(body.company || "Company");
     const timestamp = formatTimestamp(new Date());
     const newFileName = `${company}_Survey_${timestamp}.xlsx`;
 
+    console.log("Copying template...", newFileName);
     const newItemId = await copyTemplateAndWait({
       token,
       siteId: env.SITE_ID,
@@ -25,9 +31,11 @@ export async function onRequestPost(context) {
       responsesFolderId: env.RESPONSES_FOLDER_ID,
       newFileName,
     });
+    console.log("Template copied. NEW ITEM ID:", newItemId);
 
     const values = buildInputRangeValues(body);
 
+    console.log("Writing worksheet...", "Inputs_From_User", "E2:G41");
     await updateWorksheetRange({
       token,
       siteId: env.SITE_ID,
@@ -37,6 +45,7 @@ export async function onRequestPost(context) {
       address: "E2:G41",
       values,
     });
+    console.log("Worksheet updated");
 
     return json({
       ok: true,
@@ -45,6 +54,8 @@ export async function onRequestPost(context) {
       itemId: newItemId,
     });
   } catch (error) {
+    console.error("SUBMIT ERROR:", error);
+
     return json(
       {
         ok: false,
@@ -59,13 +70,17 @@ function validatePayload(body) {
   if (!body || typeof body !== "object") {
     throw new Error("Invalid JSON payload");
   }
+
   if (!body.name || !body.company) {
     throw new Error("Missing required fields: name or company");
   }
 
   const questionIds = getQuestionIds();
   for (const qid of questionIds) {
-    if (body[`${qid}_score`] === undefined || body[`${qid}_evidence`] === undefined) {
+    if (
+      body[`${qid}_score`] === undefined ||
+      body[`${qid}_evidence`] === undefined
+    ) {
       throw new Error(`Missing score or evidence for ${qid}`);
     }
   }
@@ -88,6 +103,7 @@ async function getAccessToken(env) {
   );
 
   const data = await res.json();
+
   if (!res.ok || !data.access_token) {
     throw new Error(`Token request failed: ${JSON.stringify(data)}`);
   }
@@ -129,7 +145,9 @@ async function copyTemplateAndWait({
     copyRes.headers.get("Location") || copyRes.headers.get("operation-location");
 
   if (!monitorUrl) {
+    console.log("No monitor URL returned. Falling back to polling folder.");
     await sleep(5000);
+
     const item = await findFileInResponsesFolder({
       token,
       siteId,
@@ -137,8 +155,11 @@ async function copyTemplateAndWait({
       responsesFolderId,
       fileName: newFileName,
     });
+
     return item.id;
   }
+
+  console.log("Monitor URL received. Polling copy operation...");
 
   for (let i = 0; i < 20; i++) {
     await sleep(3000);
@@ -148,12 +169,15 @@ async function copyTemplateAndWait({
     });
 
     if (monitorRes.status === 202) {
+      console.log(`Copy still in progress... attempt ${i + 1}`);
       continue;
     }
 
     const contentType = monitorRes.headers.get("content-type") || "";
+
     if (contentType.includes("application/json")) {
       const op = await monitorRes.json();
+      console.log("Copy monitor response:", JSON.stringify(op));
 
       if (op.status === "failed") {
         throw new Error(`Copy operation failed: ${JSON.stringify(op)}`);
@@ -167,6 +191,7 @@ async function copyTemplateAndWait({
           responsesFolderId,
           fileName: newFileName,
         });
+
         return item.id;
       }
     } else {
@@ -177,6 +202,7 @@ async function copyTemplateAndWait({
         responsesFolderId,
         fileName: newFileName,
       });
+
       return item.id;
     }
   }
@@ -188,6 +214,7 @@ async function copyTemplateAndWait({
     responsesFolderId,
     fileName: newFileName,
   });
+
   return item.id;
 }
 
@@ -211,6 +238,7 @@ async function findFileInResponsesFolder({
   }
 
   const item = (data.value || []).find((x) => x.name === fileName);
+
   if (!item) {
     throw new Error(`Copied file not found: ${fileName}`);
   }
@@ -227,9 +255,15 @@ async function updateWorksheetRange({
   address,
   values,
 }) {
+  const encodedSheet = encodeURIComponent(worksheetName);
+
   const url =
     `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/items/${itemId}` +
-    `/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='${address}')`;
+    `/workbook/worksheets/${encodedSheet}/range(address='${address}')`;
+
+  console.log("WORKBOOK URL:", url);
+
+  await sleep(3000);
 
   const sessionId = await createWorkbookSession({ token, siteId, driveId, itemId });
 
@@ -256,6 +290,8 @@ async function createWorkbookSession({ token, siteId, driveId, itemId }) {
   const url =
     `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/items/${itemId}` +
     `/workbook/createSession`;
+
+  console.log("CREATE SESSION URL:", url);
 
   const res = await fetch(url, {
     method: "POST",
@@ -299,14 +335,14 @@ function buildInputRangeValues(body) {
 
 function getQuestionIds() {
   return [
-    "S1.1","S1.2","S1.3","S1.4","S1.5",
-    "S2.1","S2.2","S2.3","S2.4","S2.5",
-    "S3.1","S3.2","S3.3","S3.4","S3.5",
-    "S4.1","S4.2","S4.3","S4.4","S4.5",
-    "S5.1","S5.2","S5.3","S5.4","S5.5",
-    "S6.1","S6.2","S6.3","S6.4","S6.5",
-    "S7.1","S7.2","S7.3","S7.4","S7.5",
-    "S8.1","S8.2","S8.3","S8.4","S8.5",
+    "S1.1", "S1.2", "S1.3", "S1.4", "S1.5",
+    "S2.1", "S2.2", "S2.3", "S2.4", "S2.5",
+    "S3.1", "S3.2", "S3.3", "S3.4", "S3.5",
+    "S4.1", "S4.2", "S4.3", "S4.4", "S4.5",
+    "S5.1", "S5.2", "S5.3", "S5.4", "S5.5",
+    "S6.1", "S6.2", "S6.3", "S6.4", "S6.5",
+    "S7.1", "S7.2", "S7.3", "S7.4", "S7.5",
+    "S8.1", "S8.2", "S8.3", "S8.4", "S8.5",
   ];
 }
 
