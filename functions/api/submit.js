@@ -1,3 +1,9 @@
+const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
+const tokenCache = {
+  accessToken: null,
+  expiresAt: 0,
+};
+
 export async function onRequestOptions() {
   return new Response(null, {
     status: 204,
@@ -77,16 +83,35 @@ function validatePayload(body) {
 
   const questionIds = getQuestionIds();
   for (const qid of questionIds) {
-    if (
-      body[`${qid}_score`] === undefined ||
-      body[`${qid}_evidence`] === undefined
-    ) {
+    const score = body[`${qid}_score`];
+    const evidence = body[`${qid}_evidence`];
+
+    if (score === undefined || evidence === undefined) {
       throw new Error(`Missing score or evidence for ${qid}`);
+    }
+
+    if (!Number.isInteger(Number(score)) || Number(score) < 1 || Number(score) > 5) {
+      throw new Error(`Invalid score for ${qid}`);
+    }
+
+    if (
+      !Number.isInteger(Number(evidence)) ||
+      Number(evidence) < 0 ||
+      Number(evidence) > 2
+    ) {
+      throw new Error(`Invalid evidence for ${qid}`);
     }
   }
 }
 
 async function getAccessToken(env) {
+  if (
+    tokenCache.accessToken &&
+    Date.now() < tokenCache.expiresAt - TOKEN_REFRESH_BUFFER_MS
+  ) {
+    return tokenCache.accessToken;
+  }
+
   const form = new URLSearchParams();
   form.set("client_id", env.AZURE_CLIENT_ID);
   form.set("client_secret", env.AZURE_CLIENT_SECRET);
@@ -107,6 +132,9 @@ async function getAccessToken(env) {
   if (!res.ok || !data.access_token) {
     throw new Error(`Token request failed: ${JSON.stringify(data)}`);
   }
+
+  tokenCache.accessToken = data.access_token;
+  tokenCache.expiresAt = Date.now() + (Number(data.expires_in) || 3600) * 1000;
 
   return data.access_token;
 }
@@ -146,9 +174,7 @@ async function copyTemplateAndWait({
 
   if (!monitorUrl) {
     console.log("No monitor URL returned. Falling back to polling folder.");
-    await sleep(5000);
-
-    const item = await findFileInResponsesFolder({
+    const item = await waitForFileInResponsesFolder({
       token,
       siteId,
       driveId,
@@ -161,8 +187,10 @@ async function copyTemplateAndWait({
 
   console.log("Monitor URL received. Polling copy operation...");
 
-  for (let i = 0; i < 20; i++) {
-    await sleep(3000);
+  for (let i = 0; i < 12; i++) {
+    if (i > 0) {
+      await sleep(getPollDelayMs(i));
+    }
 
     const monitorRes = await fetch(monitorUrl, {
       headers: { Authorization: `Bearer ${token}` },
@@ -184,7 +212,7 @@ async function copyTemplateAndWait({
       }
 
       if (op.status === "completed" || op.status === "succeeded") {
-        const item = await findFileInResponsesFolder({
+        const item = await waitForFileInResponsesFolder({
           token,
           siteId,
           driveId,
@@ -195,7 +223,7 @@ async function copyTemplateAndWait({
         return item.id;
       }
     } else {
-      const item = await findFileInResponsesFolder({
+      const item = await waitForFileInResponsesFolder({
         token,
         siteId,
         driveId,
@@ -207,7 +235,7 @@ async function copyTemplateAndWait({
     }
   }
 
-  const item = await findFileInResponsesFolder({
+  const item = await waitForFileInResponsesFolder({
     token,
     siteId,
     driveId,
@@ -218,6 +246,32 @@ async function copyTemplateAndWait({
   return item.id;
 }
 
+async function waitForFileInResponsesFolder({
+  token,
+  siteId,
+  driveId,
+  responsesFolderId,
+  fileName,
+}) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const item = await findFileInResponsesFolder({
+      token,
+      siteId,
+      driveId,
+      responsesFolderId,
+      fileName,
+    });
+
+    if (item) {
+      return item;
+    }
+
+    await sleep(getPollDelayMs(attempt));
+  }
+
+  throw new Error(`Copied file not found: ${fileName}`);
+}
+
 async function findFileInResponsesFolder({
   token,
   siteId,
@@ -225,25 +279,28 @@ async function findFileInResponsesFolder({
   responsesFolderId,
   fileName,
 }) {
-  const url = `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/items/${responsesFolderId}/children`;
+  let url = `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/items/${responsesFolderId}/children`;
 
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  while (url) {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  if (!res.ok) {
-    throw new Error(`Failed to list response files: ${JSON.stringify(data)}`);
+    if (!res.ok) {
+      throw new Error(`Failed to list response files: ${JSON.stringify(data)}`);
+    }
+
+    const item = (data.value || []).find((x) => x.name === fileName);
+    if (item) {
+      return item;
+    }
+
+    url = data["@odata.nextLink"] || null;
   }
 
-  const item = (data.value || []).find((x) => x.name === fileName);
-
-  if (!item) {
-    throw new Error(`Copied file not found: ${fileName}`);
-  }
-
-  return item;
+  return null;
 }
 
 async function updateWorksheetRange({
@@ -263,27 +320,49 @@ async function updateWorksheetRange({
 
   console.log("WORKBOOK URL:", url);
 
-  await sleep(3000);
+  let lastError;
 
-  const sessionId = await createWorkbookSession({ token, siteId, driveId, itemId });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let sessionId = null;
 
-  const res = await fetch(url, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "workbook-session-id": sessionId,
-    },
-    body: JSON.stringify({ values }),
-  });
+    try {
+      sessionId = await createWorkbookSession({ token, siteId, driveId, itemId });
 
-  const text = await res.text();
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "workbook-session-id": sessionId,
+        },
+        body: JSON.stringify({ values }),
+      });
 
-  await closeWorkbookSession({ token, siteId, driveId, itemId, sessionId });
+      const text = await res.text();
 
-  if (!res.ok) {
-    throw new Error(`Workbook update failed: ${res.status} ${text}`);
+      if (res.ok) {
+        return;
+      }
+
+      lastError = new Error(`Workbook update failed: ${res.status} ${text}`);
+      if (!isRetryableStatus(res.status) || attempt === 2) {
+        throw lastError;
+      }
+    } catch (error) {
+      lastError = error;
+      if (attempt === 2) {
+        throw error;
+      }
+    } finally {
+      if (sessionId) {
+        await closeWorkbookSession({ token, siteId, driveId, itemId, sessionId });
+      }
+    }
+
+    await sleep(getPollDelayMs(attempt));
   }
+
+  throw lastError || new Error("Workbook update failed");
 }
 
 async function createWorkbookSession({ token, siteId, driveId, itemId }) {
@@ -366,6 +445,15 @@ function formatTimestamp(date) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getPollDelayMs(attempt) {
+  const delays = [500, 1000, 1500, 2000, 2500, 3000];
+  return delays[Math.min(attempt, delays.length - 1)];
+}
+
+function isRetryableStatus(status) {
+  return [404, 409, 423, 429, 500, 502, 503, 504].includes(status);
 }
 
 function corsHeaders() {
