@@ -1,0 +1,351 @@
+export async function onRequestOptions() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders(),
+  });
+}
+
+export async function onRequestPost(context) {
+  try {
+    const body = await context.request.json();
+    validatePayload(body);
+
+    const env = context.env;
+    const token = await getAccessToken(env);
+
+    const company = sanitizeFileName(body.company || "Company");
+    const timestamp = formatTimestamp(new Date());
+    const newFileName = `${company}_Survey_${timestamp}.xlsx`;
+
+    const newItemId = await copyTemplateAndWait({
+      token,
+      siteId: env.SITE_ID,
+      driveId: env.DRIVE_ID,
+      templateItemId: env.TEMPLATE_ITEM_ID,
+      responsesFolderId: env.RESPONSES_FOLDER_ID,
+      newFileName,
+    });
+
+    const values = buildInputRangeValues(body);
+
+    await updateWorksheetRange({
+      token,
+      siteId: env.SITE_ID,
+      driveId: env.DRIVE_ID,
+      itemId: newItemId,
+      worksheetName: "Inputs_From_User",
+      address: "E2:G41",
+      values,
+    });
+
+    return json({
+      ok: true,
+      message: "Survey saved successfully",
+      fileName: newFileName,
+      itemId: newItemId,
+    });
+  } catch (error) {
+    return json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      500
+    );
+  }
+}
+
+function validatePayload(body) {
+  if (!body || typeof body !== "object") {
+    throw new Error("Invalid JSON payload");
+  }
+  if (!body.name || !body.company) {
+    throw new Error("Missing required fields: name or company");
+  }
+
+  const questionIds = getQuestionIds();
+  for (const qid of questionIds) {
+    if (body[`${qid}_score`] === undefined || body[`${qid}_evidence`] === undefined) {
+      throw new Error(`Missing score or evidence for ${qid}`);
+    }
+  }
+}
+
+async function getAccessToken(env) {
+  const form = new URLSearchParams();
+  form.set("client_id", env.AZURE_CLIENT_ID);
+  form.set("client_secret", env.AZURE_CLIENT_SECRET);
+  form.set("scope", "https://graph.microsoft.com/.default");
+  form.set("grant_type", "client_credentials");
+
+  const res = await fetch(
+    `https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/oauth2/v2.0/token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok || !data.access_token) {
+    throw new Error(`Token request failed: ${JSON.stringify(data)}`);
+  }
+
+  return data.access_token;
+}
+
+async function copyTemplateAndWait({
+  token,
+  siteId,
+  driveId,
+  templateItemId,
+  responsesFolderId,
+  newFileName,
+}) {
+  const copyUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/items/${templateItemId}/copy`;
+
+  const copyRes = await fetch(copyUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Prefer: "respond-async",
+    },
+    body: JSON.stringify({
+      parentReference: {
+        id: responsesFolderId,
+      },
+      name: newFileName,
+    }),
+  });
+
+  if (copyRes.status !== 202) {
+    const text = await copyRes.text();
+    throw new Error(`Template copy failed: ${copyRes.status} ${text}`);
+  }
+
+  const monitorUrl =
+    copyRes.headers.get("Location") || copyRes.headers.get("operation-location");
+
+  if (!monitorUrl) {
+    await sleep(5000);
+    const item = await findFileInResponsesFolder({
+      token,
+      siteId,
+      driveId,
+      responsesFolderId,
+      fileName: newFileName,
+    });
+    return item.id;
+  }
+
+  for (let i = 0; i < 20; i++) {
+    await sleep(3000);
+
+    const monitorRes = await fetch(monitorUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (monitorRes.status === 202) {
+      continue;
+    }
+
+    const contentType = monitorRes.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const op = await monitorRes.json();
+
+      if (op.status === "failed") {
+        throw new Error(`Copy operation failed: ${JSON.stringify(op)}`);
+      }
+
+      if (op.status === "completed" || op.status === "succeeded") {
+        const item = await findFileInResponsesFolder({
+          token,
+          siteId,
+          driveId,
+          responsesFolderId,
+          fileName: newFileName,
+        });
+        return item.id;
+      }
+    } else {
+      const item = await findFileInResponsesFolder({
+        token,
+        siteId,
+        driveId,
+        responsesFolderId,
+        fileName: newFileName,
+      });
+      return item.id;
+    }
+  }
+
+  const item = await findFileInResponsesFolder({
+    token,
+    siteId,
+    driveId,
+    responsesFolderId,
+    fileName: newFileName,
+  });
+  return item.id;
+}
+
+async function findFileInResponsesFolder({
+  token,
+  siteId,
+  driveId,
+  responsesFolderId,
+  fileName,
+}) {
+  const url = `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/items/${responsesFolderId}/children`;
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(`Failed to list response files: ${JSON.stringify(data)}`);
+  }
+
+  const item = (data.value || []).find((x) => x.name === fileName);
+  if (!item) {
+    throw new Error(`Copied file not found: ${fileName}`);
+  }
+
+  return item;
+}
+
+async function updateWorksheetRange({
+  token,
+  siteId,
+  driveId,
+  itemId,
+  worksheetName,
+  address,
+  values,
+}) {
+  const url =
+    `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/items/${itemId}` +
+    `/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='${address}')`;
+
+  const sessionId = await createWorkbookSession({ token, siteId, driveId, itemId });
+
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "workbook-session-id": sessionId,
+    },
+    body: JSON.stringify({ values }),
+  });
+
+  const text = await res.text();
+
+  await closeWorkbookSession({ token, siteId, driveId, itemId, sessionId });
+
+  if (!res.ok) {
+    throw new Error(`Workbook update failed: ${res.status} ${text}`);
+  }
+}
+
+async function createWorkbookSession({ token, siteId, driveId, itemId }) {
+  const url =
+    `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/items/${itemId}` +
+    `/workbook/createSession`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ persistChanges: true }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok || !data.id) {
+    throw new Error(`Failed to create workbook session: ${JSON.stringify(data)}`);
+  }
+
+  return data.id;
+}
+
+async function closeWorkbookSession({ token, siteId, driveId, itemId, sessionId }) {
+  const url =
+    `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/items/${itemId}` +
+    `/workbook/closeSession`;
+
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "workbook-session-id": sessionId,
+    },
+  });
+}
+
+function buildInputRangeValues(body) {
+  return getQuestionIds().map((qid) => [
+    body[`${qid}_score`] ?? "",
+    body[`${qid}_evidence`] ?? "",
+    body[`${qid}_owner`] ?? "",
+  ]);
+}
+
+function getQuestionIds() {
+  return [
+    "S1.1","S1.2","S1.3","S1.4","S1.5",
+    "S2.1","S2.2","S2.3","S2.4","S2.5",
+    "S3.1","S3.2","S3.3","S3.4","S3.5",
+    "S4.1","S4.2","S4.3","S4.4","S4.5",
+    "S5.1","S5.2","S5.3","S5.4","S5.5",
+    "S6.1","S6.2","S6.3","S6.4","S6.5",
+    "S7.1","S7.2","S7.3","S7.4","S7.5",
+    "S8.1","S8.2","S8.3","S8.4","S8.5",
+  ];
+}
+
+function sanitizeFileName(name) {
+  return String(name)
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 80) || "Company";
+}
+
+function formatTimestamp(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...corsHeaders(),
+    },
+  });
+}

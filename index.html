@@ -253,8 +253,7 @@ h1 em{font-style:italic;color:var(--gold)}
 </div>
 
 <script>
-const POWER_AUTOMATE_URL = "https://defaultbee8ad5672074dac824cf961a16f43.b9.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/f2bddd0dae674e1db813d81825912429/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=VjkgNWFNK8vLan9-pkLnIl-auD_gr0J7IQlCF6V9LPM";
-
+const SUBMIT_URL = "/api/submit";
 const sections = [
   {id:"S1",title:"Strategy & Business Value",weight:0.15,questions:[
     {id:"S1.1",text:"Do we have a clearly stated AI vision tied to 12–24 month business priorities?"},
@@ -421,7 +420,7 @@ document.getElementById('assessmentForm').addEventListener('submit',async functi
   }));
 
   try{
-    const res=await fetch(POWER_AUTOMATE_URL,{method:'POST',
+    const res=await fetch(SUBMIT_URL,{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     if(!res.ok) throw new Error('Server error '+res.status);
     document.getElementById('successOverlay').classList.add('show');
