@@ -221,6 +221,11 @@ async function copyTemplateAndWait({
       const op = await monitorRes.json();
       console.log("Copy monitor response:", JSON.stringify(op));
 
+      if (isInvalidAudienceMonitorError(op)) {
+        console.log("Monitor URL rejected Graph token. Falling back to folder polling.");
+        break;
+      }
+
       if (op.status === "failed") {
         throw new Error(`Copy operation failed: ${JSON.stringify(op)}`);
       }
@@ -475,6 +480,17 @@ function getPollDelayMs(attempt) {
 
 function isRetryableStatus(status) {
   return [404, 409, 423, 429, 500, 502, 503, 504].includes(status);
+}
+
+function isInvalidAudienceMonitorError(op) {
+  return (
+    op &&
+    typeof op === "object" &&
+    op.error &&
+    op.error.code === "unauthenticated" &&
+    op.error.innerError &&
+    op.error.innerError.code === "invalidAudienceUri"
+  );
 }
 
 function corsHeaders() {
