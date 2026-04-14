@@ -1,4 +1,7 @@
 const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
+const INPUTS_WORKSHEET_NAME = "Inputs_From_User";
+const RESPONDENT_DETAILS_RANGE = "E2:E4";
+const QUESTION_INPUT_RANGE = "E5:G44";
 const tokenCache = {
   accessToken: null,
   expiresAt: 0,
@@ -44,17 +47,29 @@ export async function onRequestPost(context) {
     console.log("Template copied. NEW ITEM ID:", newItemId);
     console.log(`copy_total_ms=${Date.now() - copyStartedAt}`);
 
+    const respondentValues = buildRespondentDetailsValues(body);
     const values = buildInputRangeValues(body);
 
-    console.log("Writing worksheet...", "Inputs_From_User", "E2:G41");
+    console.log("Writing respondent details...", INPUTS_WORKSHEET_NAME, RESPONDENT_DETAILS_RANGE);
     const worksheetStartedAt = Date.now();
     await updateWorksheetRange({
       token,
       siteId: env.SITE_ID,
       driveId: env.DRIVE_ID,
       itemId: newItemId,
-      worksheetName: "Inputs_From_User",
-      address: "E2:G41",
+      worksheetName: INPUTS_WORKSHEET_NAME,
+      address: RESPONDENT_DETAILS_RANGE,
+      values: respondentValues,
+    });
+
+    console.log("Writing worksheet...", INPUTS_WORKSHEET_NAME, QUESTION_INPUT_RANGE);
+    await updateWorksheetRange({
+      token,
+      siteId: env.SITE_ID,
+      driveId: env.DRIVE_ID,
+      itemId: newItemId,
+      worksheetName: INPUTS_WORKSHEET_NAME,
+      address: QUESTION_INPUT_RANGE,
       values,
     });
     console.log("Worksheet updated");
@@ -436,6 +451,14 @@ function buildInputRangeValues(body) {
     body[`${qid}_evidence`] ?? "",
     body[`${qid}_owner`] ?? "",
   ]);
+}
+
+function buildRespondentDetailsValues(body) {
+  return [
+    [body.name ?? ""],
+    [body.company ?? ""],
+    [body.email ?? ""],
+  ];
 }
 
 function getQuestionIds() {
