@@ -103,13 +103,14 @@ body::before{
 
 .hero-grid{
   display:grid;
-  grid-template-columns:minmax(0,1.45fr) minmax(280px,0.8fr);
-  gap:24px;
+  grid-template-columns:minmax(0,1fr);
+  gap:20px;
   align-items:stretch;
 }
 
 .hero-copy{
   padding:10px 0 0;
+  max-width:980px;
 }
 
 .hero-copy h1{
@@ -129,33 +130,6 @@ body::before{
   line-height:1.65;
 }
 
-.hero-points{
-  display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:12px;
-  margin-top:22px;
-}
-
-.hero-point{
-  border:1px solid var(--border);
-  border-radius:16px;
-  padding:16px;
-  background:var(--surface);
-}
-
-.hero-point strong{
-  display:block;
-  margin-bottom:8px;
-  color:var(--text);
-  font-size:14px;
-}
-
-.hero-point span{
-  color:var(--muted);
-  font-size:13px;
-  line-height:1.55;
-}
-
 .hero-panel{
   position:relative;
   border:1px solid var(--border);
@@ -164,6 +138,7 @@ body::before{
   overflow:hidden;
   background:var(--surface);
   box-shadow:var(--shadow);
+  max-width:980px;
 }
 
 .hero-panel::before{
@@ -189,28 +164,29 @@ body::before{
 .hero-panel-title{
   position:relative;
   z-index:1;
-  margin-top:12px;
+  margin-top:10px;
   font-family:"Sora",sans-serif;
-  font-size:29px;
+  font-size:24px;
   line-height:1.2;
 }
 
 .hero-panel-text{
   position:relative;
   z-index:1;
-  margin-top:14px;
+  margin-top:12px;
   color:var(--muted);
   font-size:15px;
   line-height:1.7;
+  max-width:760px;
 }
 
 .hero-stats{
   position:relative;
   z-index:1;
   display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-columns:repeat(4,minmax(0,1fr));
   gap:16px;
-  margin-top:24px;
+  margin-top:18px;
 }
 
 .hero-stat{
@@ -771,7 +747,7 @@ body::before{
 }
 
 @media(max-width:980px){
-  .hero-grid,.scale-band,.hero-points{grid-template-columns:1fr}
+  .hero-grid,.scale-band,.hero-stats{grid-template-columns:1fr}
   .identity-head,.topbar{flex-direction:column;align-items:flex-start}
 }
 
@@ -808,27 +784,13 @@ body::before{
             A structured assessment to evaluate AI strategy, technology, governance,
             delivery discipline, and enterprise readiness across eight core dimensions.
           </p>
-          <div class="hero-points">
-            <div class="hero-point">
-              <strong>40 questions</strong>
-              <span>Clear scoring across the areas that matter most for enterprise AI readiness.</span>
-            </div>
-            <div class="hero-point">
-              <strong>8 dimensions</strong>
-              <span>From business value and use cases through governance, adoption, and value realization.</span>
-            </div>
-            <div class="hero-point">
-              <strong>Simple submission</strong>
-              <span>Complete the form and submit directly into the current SharePoint-based workflow.</span>
-            </div>
-          </div>
         </div>
 
-        <aside class="hero-panel">
+        <section class="hero-panel">
           <div class="hero-panel-label">Assessment Overview</div>
-          <div class="hero-panel-title">A simple intake experience aligned to Narwal branding.</div>
+          <div class="hero-panel-title">A clear intake experience for capturing enterprise AI maturity.</div>
           <p class="hero-panel-text">
-            This layout keeps the form professional and clean while preserving the exact submission flow already in production.
+            Complete one structured assessment covering strategy, use cases, data, platforms, governance, adoption, and value realization. Each response is submitted directly into the current SharePoint-based workflow.
           </p>
           <div class="hero-stats">
             <div class="hero-stat">
@@ -848,7 +810,7 @@ body::before{
               <span>Evidence scale from none to documented.</span>
             </div>
           </div>
-        </aside>
+        </section>
       </div>
     </div>
 
