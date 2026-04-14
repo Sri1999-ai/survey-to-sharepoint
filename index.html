@@ -902,7 +902,9 @@ body::before{
 
   <main class="form-wrap">
     <form id="assessmentForm">
-      <section class="identity-card">
+      <div id="sectionsContainer"></div>
+
+      <section class="identity-card section-card" id="respondentCard">
         <div class="identity-head">
           <div>
             <h2 class="identity-title">Respondent Information</h2>
@@ -922,9 +924,13 @@ body::before{
             <input type="email" id="respEmail" placeholder="e.g. sarah@acme.com" required/>
           </div>
         </div>
+        <div class="section-nav">
+          <div class="section-nav-copy">Section 9 of 9</div>
+          <div class="section-nav-actions">
+            <button type="button" class="nav-btn" onclick="goToSection(7)">Previous</button>
+          </div>
+        </div>
       </section>
-
-      <div id="sectionsContainer"></div>
 
       <section class="submit-area">
         <div class="completion-ring">
@@ -1021,6 +1027,7 @@ const sections = [
 const scores = {}, evidences = {}, owners = {};
 const TOTAL = 40;
 let currentSectionIndex = 0;
+const TOTAL_STEPS = sections.length + 1;
 
 function buildSections(){
   const container = document.getElementById("sectionsContainer");
@@ -1076,7 +1083,7 @@ function buildSections(){
         <div class="section-nav-copy">Section ${si + 1} of ${sections.length}</div>
         <div class="section-nav-actions">
           ${si > 0 ? `<button type="button" class="nav-btn" onclick="goToSection(${si - 1})">Previous</button>` : ""}
-          ${si < sections.length - 1 ? `<button type="button" class="nav-btn primary" onclick="goToSection(${si + 1})">Next</button>` : ""}
+          <button type="button" class="nav-btn primary" onclick="goToSection(${si + 1})">Next</button>
         </div>
       </div>`;
     container.appendChild(card);
@@ -1084,13 +1091,13 @@ function buildSections(){
 }
 
 function goToSection(index){
-  currentSectionIndex = Math.max(0, Math.min(index, sections.length - 1));
+  currentSectionIndex = Math.max(0, Math.min(index, TOTAL_STEPS - 1));
   document.querySelectorAll(".section-card").forEach((card, idx) => {
     card.classList.toggle("active", idx === currentSectionIndex);
   });
   const submitArea = document.querySelector(".submit-area");
   if (submitArea) {
-    submitArea.style.display = currentSectionIndex === sections.length - 1 ? "block" : "none";
+    submitArea.style.display = currentSectionIndex === TOTAL_STEPS - 1 ? "block" : "none";
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
