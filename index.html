@@ -1083,7 +1083,7 @@ function buildSections(){
         <div class="section-nav-copy">Section ${si + 1} of ${sections.length}</div>
         <div class="section-nav-actions">
           ${si > 0 ? `<button type="button" class="nav-btn" onclick="goToSection(${si - 1})">Previous</button>` : ""}
-          <button type="button" class="nav-btn primary" onclick="goToSection(${si + 1})">Next</button>
+          <button type="button" class="nav-btn primary" id="nextBtn-${si}" onclick="goToSection(${si + 1})" disabled>Next</button>
         </div>
       </div>`;
     container.appendChild(card);
@@ -1100,6 +1100,26 @@ function goToSection(index){
     submitArea.style.display = currentSectionIndex === TOTAL_STEPS - 1 ? "block" : "none";
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function isSectionComplete(sectionIndex){
+  const section = sections[sectionIndex];
+  if (!section) {
+    return false;
+  }
+
+  return section.questions.every((q) =>
+    scores[q.id] !== undefined && evidences[q.id] !== undefined
+  );
+}
+
+function updateSectionNavigation(){
+  sections.forEach((_, index) => {
+    const nextBtn = document.getElementById(`nextBtn-${index}`);
+    if (nextBtn) {
+      nextBtn.disabled = !isSectionComplete(index);
+    }
+  });
 }
 
 function setScore(qid, score, btn){
@@ -1139,6 +1159,7 @@ function updateProgress(){
   document.getElementById("submitNote").textContent =
     rem === 0 ? "All questions answered. Ready to submit." :
     `${rem} question${rem === 1 ? "" : "s"} remaining. Score and evidence are required for each.`;
+  updateSectionNavigation();
 }
 
 document.getElementById("assessmentForm").addEventListener("submit", async function(e){
