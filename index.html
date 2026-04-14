@@ -60,9 +60,9 @@ body::before{
 .topbar{
   display:flex;
   align-items:center;
-  justify-content:space-between;
+  justify-content:flex-end;
   gap:20px;
-  margin-bottom:30px;
+  margin-bottom:12px;
 }
 
 .brand-lockup{
@@ -73,7 +73,7 @@ body::before{
 
 .brand-logo{
   display:block;
-  width:min(100%, 360px);
+  width:min(100%, 270px);
   height:auto;
   object-fit:contain;
 }
@@ -91,6 +91,7 @@ body::before{
   font-weight:700;
   letter-spacing:0.08em;
   text-transform:uppercase;
+  margin-bottom:14px;
 }
 
 .hero-pill-dot{
@@ -748,7 +749,8 @@ body::before{
 
 @media(max-width:980px){
   .hero-grid,.scale-band,.hero-stats{grid-template-columns:1fr}
-  .identity-head,.topbar{flex-direction:column;align-items:flex-start}
+  .identity-head{flex-direction:column;align-items:flex-start}
+  .topbar{justify-content:flex-start}
 }
 
 @media(max-width:760px){
