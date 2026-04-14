@@ -497,6 +497,10 @@ body::before{
   font-size:13px;
 }
 
+.section-nav-copy.error{
+  color:#d97a7a;
+}
+
 .section-nav-actions{
   display:flex;
   gap:10px;
@@ -1080,7 +1084,7 @@ function buildSections(){
         `).join("")}
       </div>
       <div class="section-nav">
-        <div class="section-nav-copy">Section ${si + 1} of ${sections.length}</div>
+        <div class="section-nav-copy" id="sectionStatus-${si}">Section ${si + 1} of ${sections.length}</div>
         <div class="section-nav-actions">
           ${si > 0 ? `<button type="button" class="nav-btn" onclick="goToSection(${si - 1})">Previous</button>` : ""}
           <button type="button" class="nav-btn primary" id="nextBtn-${si}" onclick="goToSection(${si + 1})" disabled>Next</button>
@@ -1116,8 +1120,16 @@ function isSectionComplete(sectionIndex){
 function updateSectionNavigation(){
   sections.forEach((_, index) => {
     const nextBtn = document.getElementById(`nextBtn-${index}`);
+    const status = document.getElementById(`sectionStatus-${index}`);
+    const complete = isSectionComplete(index);
     if (nextBtn) {
-      nextBtn.disabled = !isSectionComplete(index);
+      nextBtn.disabled = !complete;
+    }
+    if (status) {
+      status.textContent = complete
+        ? `Section ${index + 1} of ${sections.length}`
+        : `Section ${index + 1} of ${sections.length} - complete all required score and evidence fields to continue`;
+      status.classList.toggle("error", !complete);
     }
   });
 }
