@@ -1,6 +1,6 @@
 const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
 const INPUTS_WORKSHEET_NAME = "Inputs_From_User";
-const RESPONDENT_DETAILS_RANGE = "E2:E4";
+const RESPONDENT_DETAILS_RANGE = "E1:E3";
 const QUESTION_INPUT_RANGE = "E5:G44";
 const tokenCache = {
   accessToken: null,
