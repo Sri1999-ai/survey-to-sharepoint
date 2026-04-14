@@ -387,7 +387,10 @@ body::before{
   overflow:hidden;
   background:var(--surface);
   box-shadow:var(--shadow);
+  display:none;
 }
+
+.section-card.active{display:block}
 
 .section-header{
   display:flex;
@@ -478,6 +481,56 @@ body::before{
 
 .q-row:last-child{border-bottom:none}
 .q-row:hover{background:rgba(255,255,255,0.015)}
+
+.section-nav{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:18px 28px 22px;
+  border-top:1px solid var(--border);
+  background:var(--surface-2);
+}
+
+.section-nav-copy{
+  color:var(--muted);
+  font-size:13px;
+}
+
+.section-nav-actions{
+  display:flex;
+  gap:10px;
+}
+
+.nav-btn{
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px 18px;
+  background:var(--surface);
+  color:var(--text);
+  font:inherit;
+  font-size:14px;
+  font-weight:700;
+  cursor:pointer;
+  transition:border-color 0.2s, background 0.2s, color 0.2s;
+}
+
+.nav-btn:hover{
+  border-color:var(--brand);
+  color:var(--brand);
+}
+
+.nav-btn.primary{
+  border-color:#72c3f0;
+  background:#72c3f0;
+  color:#0a2d44;
+}
+
+.nav-btn.primary:hover{
+  border-color:#5ab8eb;
+  background:#5ab8eb;
+  color:#0a2d44;
+}
 
 .q-left{
   display:flex;
@@ -967,6 +1020,7 @@ const sections = [
 
 const scores = {}, evidences = {}, owners = {};
 const TOTAL = 40;
+let currentSectionIndex = 0;
 
 function buildSections(){
   const container = document.getElementById("sectionsContainer");
@@ -975,6 +1029,7 @@ function buildSections(){
     const fillW = Math.round(sec.weight / 0.15 * 100);
     const card = document.createElement("section");
     card.className = "section-card";
+    card.id = `section-${si}`;
     card.innerHTML = `
       <div class="section-header">
         <div class="section-num">S${si + 1}</div>
@@ -1016,9 +1071,28 @@ function buildSections(){
             </div>
           </div>
         `).join("")}
+      </div>
+      <div class="section-nav">
+        <div class="section-nav-copy">Section ${si + 1} of ${sections.length}</div>
+        <div class="section-nav-actions">
+          ${si > 0 ? `<button type="button" class="nav-btn" onclick="goToSection(${si - 1})">Previous</button>` : ""}
+          ${si < sections.length - 1 ? `<button type="button" class="nav-btn primary" onclick="goToSection(${si + 1})">Next</button>` : ""}
+        </div>
       </div>`;
     container.appendChild(card);
   });
+}
+
+function goToSection(index){
+  currentSectionIndex = Math.max(0, Math.min(index, sections.length - 1));
+  document.querySelectorAll(".section-card").forEach((card, idx) => {
+    card.classList.toggle("active", idx === currentSectionIndex);
+  });
+  const submitArea = document.querySelector(".submit-area");
+  if (submitArea) {
+    submitArea.style.display = currentSectionIndex === sections.length - 1 ? "block" : "none";
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function setScore(qid, score, btn){
@@ -1114,6 +1188,7 @@ function resetForm(){
 
 buildSections();
 updateProgress();
+goToSection(0);
 </script>
 </body>
 </html>
