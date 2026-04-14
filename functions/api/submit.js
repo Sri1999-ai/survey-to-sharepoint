@@ -85,8 +85,8 @@ function validatePayload(body) {
     throw new Error("Invalid JSON payload");
   }
 
-  if (!body.name || !body.company) {
-    throw new Error("Missing required fields: name or company");
+  if (!body.name || !body.company || !body.email) {
+    throw new Error("Missing required fields: name, company, or email");
   }
 
   const questionIds = getQuestionIds();

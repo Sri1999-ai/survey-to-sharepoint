@@ -867,6 +867,10 @@ body::before{
             <label for="respCompany">Company *</label>
             <input type="text" id="respCompany" placeholder="e.g. Acme Corporation" required/>
           </div>
+          <div class="field-group">
+            <label for="respEmail">Company Email *</label>
+            <input type="email" id="respEmail" placeholder="e.g. sarah@acme.com" required/>
+          </div>
         </div>
         <p class="req-note">All 40 questions require a score and evidence selection before submission.</p>
       </section>
@@ -1064,8 +1068,9 @@ document.getElementById("assessmentForm").addEventListener("submit", async funct
   e.preventDefault();
   const name = document.getElementById("respName").value.trim();
   const company = document.getElementById("respCompany").value.trim();
-  if (!name || !company) {
-    alert("Please enter your name and company.");
+  const email = document.getElementById("respEmail").value.trim();
+  if (!name || !company || !email) {
+    alert("Please enter your name, company, and company email.");
     return;
   }
 
@@ -1074,7 +1079,7 @@ document.getElementById("assessmentForm").addEventListener("submit", async funct
   btn.disabled = true;
   document.getElementById("errorMsg").classList.remove("show");
 
-  const payload = { submitted_at: new Date().toISOString(), name, company };
+  const payload = { submitted_at: new Date().toISOString(), name, company, email };
   sections.forEach((sec) => sec.questions.forEach((q) => {
     payload[q.id + "_score"] = scores[q.id] ?? "";
     payload[q.id + "_evidence"] = evidences[q.id] ?? "";
@@ -1105,6 +1110,7 @@ function resetForm(){
   document.querySelectorAll(".owner-input").forEach((i) => i.value = "");
   document.getElementById("respName").value = "";
   document.getElementById("respCompany").value = "";
+  document.getElementById("respEmail").value = "";
   document.getElementById("successOverlay").classList.remove("show");
   updateProgress();
   window.scrollTo({ top: 0, behavior: "smooth" });
