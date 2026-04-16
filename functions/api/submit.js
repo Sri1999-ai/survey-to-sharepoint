@@ -123,7 +123,7 @@ function validatePayload(body) {
   }
 
   if (!isBusinessEmail(body.email)) {
-    throw new Error("Please provide a valid business email address");
+    throw new Error("Please provide your company address");
   }
 
   const questionIds = getQuestionIds();
