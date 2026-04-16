@@ -2,6 +2,24 @@ const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
 const INPUTS_WORKSHEET_NAME = "Inputs_From_User";
 const RESPONDENT_DETAILS_RANGE = "E1:E3";
 const QUESTION_INPUT_RANGE = "E5:G44";
+const GENERIC_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "ymail.com",
+  "aol.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "protonmail.com",
+  "pm.me",
+  "gmx.com",
+  "mail.com",
+  "zoho.com",
+]);
 const tokenCache = {
   accessToken: null,
   expiresAt: 0,
@@ -102,6 +120,10 @@ function validatePayload(body) {
 
   if (!body.name || !body.company || !body.email) {
     throw new Error("Missing required fields: name, company, or email");
+  }
+
+  if (!isBusinessEmail(body.email)) {
+    throw new Error("Please provide a valid business email address");
   }
 
   const questionIds = getQuestionIds();
@@ -459,6 +481,17 @@ function buildRespondentDetailsValues(body) {
     [body.company ?? ""],
     [body.email ?? ""],
   ];
+}
+
+function isBusinessEmail(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  const parts = normalized.split("@");
+
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return false;
+  }
+
+  return !GENERIC_EMAIL_DOMAINS.has(parts[1]);
 }
 
 function getQuestionIds() {

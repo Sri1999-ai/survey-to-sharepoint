@@ -333,6 +333,14 @@ body::before{
   line-height:1.2;
 }
 
+.identity-note{
+  margin-top:10px;
+  max-width:760px;
+  color:var(--muted);
+  font-size:14px;
+  line-height:1.65;
+}
+
 .identity-text{
   max-width:540px;
   color:var(--muted);
@@ -914,6 +922,7 @@ body::before{
         <div class="identity-head">
           <div>
             <h2 class="identity-title">Respondent Information</h2>
+            <p class="identity-note">Please provide your business email address. The assessment result will be sent there, and generic personal email domains are not accepted.</p>
           </div>
         </div>
         <div class="identity-grid">
@@ -1034,6 +1043,24 @@ const scores = {}, evidences = {}, owners = {};
 const TOTAL = 40;
 let currentSectionIndex = 0;
 const TOTAL_STEPS = sections.length + 1;
+const GENERIC_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "ymail.com",
+  "aol.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "protonmail.com",
+  "pm.me",
+  "gmx.com",
+  "mail.com",
+  "zoho.com"
+]);
 
 function buildSections(){
   const container = document.getElementById("sectionsContainer");
@@ -1175,6 +1202,16 @@ function updateProgress(){
   updateSectionNavigation();
 }
 
+function isBusinessEmail(email){
+  const normalized = String(email || "").trim().toLowerCase();
+  const parts = normalized.split("@");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return false;
+  }
+
+  return !GENERIC_EMAIL_DOMAINS.has(parts[1]);
+}
+
 document.getElementById("assessmentForm").addEventListener("submit", async function(e){
   e.preventDefault();
   const name = document.getElementById("respName").value.trim();
@@ -1182,6 +1219,10 @@ document.getElementById("assessmentForm").addEventListener("submit", async funct
   const email = document.getElementById("respEmail").value.trim();
   if (!name || !company || !email) {
     alert("Please enter your name, company, and company email.");
+    return;
+  }
+  if (!isBusinessEmail(email)) {
+    alert("Please enter a valid business email address. Generic personal email domains are not accepted.");
     return;
   }
 
