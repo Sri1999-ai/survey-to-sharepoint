@@ -1,0 +1,8 @@
+{
+  "name": "survey-to-sharepoint",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}

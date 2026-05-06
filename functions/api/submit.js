@@ -33,14 +33,16 @@ export async function onRequestOptions() {
 }
 
 export async function onRequestPost(context) {
+  return handleSubmitRequest(context.request, context.env);
+}
+
+export async function handleSubmitRequest(request, env) {
   const requestStartedAt = Date.now();
   try {
     console.log("START submit");
 
-    const body = await context.request.json();
+    const body = await request.json();
     validatePayload(body);
-
-    const env = context.env;
 
     console.log("Getting token...");
     const tokenStartedAt = Date.now();

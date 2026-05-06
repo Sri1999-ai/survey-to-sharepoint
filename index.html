@@ -978,8 +978,9 @@ body::before{
   </div>
 </div>
 
+<script src="config.js"></script>
 <script>
-const SUBMIT_URL = "/api/submit";
+const SUBMIT_URL = window.SURVEY_CONFIG?.submitUrl || "/api/submit";
 const sections = [
   {id:"S1",title:"Strategy & Business Value",weight:0.15,questions:[
     {id:"S1.1",text:"Do we have a clearly stated AI vision tied to 12-24 month business priorities?"},
